@@ -51,66 +51,48 @@ local function http_get(url,headers)
 end
 
 local function new_require(a,b)
-	local Type = typeof(a)
-
-	if Type == "string" and b ~= true then
-
-		local cached = Cache[a]
-		if cached then
-			return cached
-		end
-
-		local url
-		if a:sub(1,4):lower() == 'http' then -- Regular http link
-			url = a
-		elseif string.len(a) == 8 then -- Pastebin ID
-			url = pastebin_base_url .. a
-		else -- Modules from github repository
-			url = github_base_url .. a .. '.lua'
-		end
-
-		local success,body,res = pcall(http_get,url)
-		if not success then
-			error(("Error loading %s: %s"):format(url,body),2)
-		elseif res.StatusCode ~= 200 then
-			error(("Error loading %s: server returned status code %s"):format(url,res.StatusCode),2)
-		end
-
-		local success,fun,err = pcall(loadstring,body)
-		if not success then
-			error(("Loadstring error: %s"):format(fun),2)
-		elseif not fun then
-			error(("Error parsing module: %s"):format(err),2)
-		end
-
-		local module_env = setmetatable({
-			module = {}
-		},{
-			__index = env
-		})
-		setfenv(fun,module_env)
-
-		local success,var = pcall(fun)
-		if not success then
-			error(("Error running module: %s"):format(var),2)
-		elseif not var then
-			error("Module didn't return a single value",2)
-		end
-
-		Cache[a] = var
-
-		return var
-
-	else -- For tusk's encrypted require id and requiring regular ModuleScript instances
-
+	if typeof(a) ~= "string" then
 		local success,errmsg = pcall(old_require,a,b)
 		if not success then
-			error(errmsg,2)
-		else
-			return errmsg
+			return error(errmsg,2)
 		end
-
+		return errmsg
 	end
+	
+	local cached = Cache[a]
+	if cached then
+		return cached
+	end
+	local url
+	if a:sub(1,4):lower() == 'http' then -- Regular http link
+		url = a
+	elseif #a == 8 then -- Pastebin ID
+		url = pastebin_base_url .. a
+	else -- Modules from github repository
+		url = github_base_url .. a .. '.lua'
+	end
+	local success,body,res = pcall(http_get,url)
+	if not success then
+		error(("Error loading %s: %s"):format(url,body),2)
+	elseif res.StatusCode ~= 200 then
+		error(("Error loading %s: server returned status code %s"):format(url,res.StatusCode),2)
+	end
+	local success,fun,err = pcall(loadstring,body)
+	if not success then
+		error(("Loadstring error: %s"):format(fun),2)
+	elseif not fun then
+		error(("Error parsing module: %s"):format(err),2)
+	end
+	local module_env = setmetatable({ module = {} },{ __index = env })
+	setfenv(fun,module_env)
+	local success,var = pcall(fun)
+	if not success then
+		error(("Error running module: %s"):format(var),2)
+	elseif not var then
+		error("Module did not return a single value",2)
+	end
+	Cache[a] = var
+	return var
 end
 
 env.require = new_require
